@@ -309,11 +309,17 @@ void fire()
     stateEndTime = stateStartTime + std::chrono::milliseconds(2000 + rand()%6000);
     anims.play((xdir > 0)?"sitting_r":"sitting", 6);
   }
-  if (state == State::Seated && stateEndTime <= csc::now())
+  if (state == State::Standing && anims.finished())
   {
     state = State::Walking;
     stateStartTime = csc::now();
     walkOrRun();
+  }
+  if (state == State::Seated && stateEndTime <= csc::now())
+  {
+    state = State::Standing;
+    anims.play((xdir > 0)?"stand_r":"stand", 6);
+    stateStartTime = csc::now();
   }
   if (state == State::Up && stateEndTime <= csc::now())
   {
