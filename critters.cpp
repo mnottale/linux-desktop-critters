@@ -48,44 +48,72 @@ bool hasGround(int x, int y)
   std::cerr << "miss " << x << " " << y << std::endl;
   return false;
 }
-void filterH(Line& line, QRect const& mask)
+void filterH(Line& line, int begin, int end)
 {
-  if (line.y < mask.top() || line.y > mask.bottom())
-    return;
-  if (line.x > mask.right() || line.x+line.s < mask.left())
-    return;
-  if (line.x > mask.left())
+  for (int i=begin; i<end; i++)
   {
-    int delta = mask.right()-line.x;
-    line.x += delta;
-    line.s -= delta;
+    auto const& mask = windows[i];
+    if (line.y < mask.top() || line.y > mask.bottom())
+      continue;
+    if (line.x > mask.right() || line.x+line.s < mask.left())
+      continue;
+    if (line.x >= mask.left())
+    {
+      int delta = mask.right()-line.x;
+      line.x += delta;
+      line.s -= delta;
+    }
+    if (line.s > 0 && line.x+line.s < mask.right())
+    {
+      int delta = mask.left()-line.x-line.s;
+      line.s -= delta;
+    }
+    if (line.s >0 && line.x < mask.left() && line.x+line.s > mask.right())
+    {
+      Line lpart{line.x, line.y, mask.left()-line.x};
+      Line rpart{mask.right(), line.y, line.x+line.s-mask.right()};
+      filterH(lpart, begin+1, end);
+      filterH(rpart, begin+1, end);
+      return;
+    }
+    if (line.s <= 0)
+      return;
   }
-  if (line.x+line.s < mask.right())
-  {
-    int delta = mask.left()-line.x-line.s;
-    line.s -= delta;
-  }
-  // FIXME: doesn't deal with center cut
+  hLines.push_back(line);
 }
 
-void filterV(Line& line, QRect const& mask)
+void filterV(Line& line, int begin, int end)
 {
-  if (line.x < mask.left() || line.x > mask.right())
-    return;
-  if (line.y > mask.bottom() || line.y+line.s < mask.top())
-    return;
-  if (line.y > mask.top())
+  for (int i=begin; i<end; i++)
   {
-    int delta = mask.bottom()-line.y;
-    line.y += delta;
-    line.s -= delta;
+    auto const& mask = windows[i];
+    if (line.x < mask.left() || line.x > mask.right())
+      continue;
+    if (line.y > mask.bottom() || line.y+line.s < mask.top())
+      continue;
+    if (line.y > mask.top())
+    {
+      int delta = mask.bottom()-line.y;
+      line.y += delta;
+      line.s -= delta;
+    }
+    if (line.y+line.s < mask.bottom())
+    {
+      int delta = mask.top()-line.y-line.s;
+      line.s -= delta;
+    }
+    if (line.s >0 && line.y < mask.top() && line.y+line.s > mask.bottom())
+    {
+      Line lpart{line.x, line.y, mask.top()-line.y};
+      Line rpart{line.x, mask.bottom(), line.y+line.s-mask.bottom()};
+      filterV(lpart, begin+1, end);
+      filterV(rpart, begin+1, end);
+      return;
+    }
+    if (line.s <= 0)
+      return;
   }
-  if (line.y+line.s < mask.bottom())
-  {
-    int delta = mask.top()-line.y-line.s;
-    line.s -= delta;
-  }
-  // FIXME: doesn't deal with center cut
+  vLines.push_back(line);
 }
 void windowsToLines()
 {
@@ -98,21 +126,10 @@ void windowsToLines()
     Line bottom = Line{cand.left(), cand.bottom(), cand.width()};
     Line left = Line{cand.left(), cand.top(), cand.height()};
     Line right = Line{cand.right(), cand.top(), cand.height()};
-    for (int j=0; j<i; j++)
-    {
-      filterH(top, windows[j]);
-      filterH(bottom, windows[j]);
-      filterV(left, windows[j]);
-      filterV(right, windows[j]);
-    }
-    if (top.s > 0)
-      hLines.push_back(top);
-    if (bottom.s > 0)
-      hLines.push_back(bottom);
-    if (left.s > 0)
-      vLines.push_back(left);
-    if (right.s > 0)
-      vLines.push_back(right);
+    filterH(top, 0, i);
+    filterH(bottom, 0, i);
+    filterV(left, 0, i);
+    filterV(right, 0, i);
   }
   // debug
   for (auto const& l: hLines)
