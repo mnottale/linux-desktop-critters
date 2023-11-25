@@ -4,10 +4,12 @@
 #include <QWindow>
 #include <QTimer>
 #include <QDesktopWidget>
+#include <QDir>
 
 #include <sstream>
 #include <iostream>
 #include <chrono>
+#include <unordered_map>
 #include <unistd.h>
 
 using csc = std::chrono::steady_clock;
@@ -17,6 +19,19 @@ struct Line
   int x, y, s;
 };
 
+class Anims
+{
+public:
+  void load(std::string const& dir);
+  void play(std::string const& anim, int speed=1);
+  void step();
+private:
+  std::unordered_map<std::string, std::vector<QPixmap>> frames;
+  std::string current;
+  int speed;
+  int pos;
+};
+
 FILE* file;
 int fd;
 char buffer[32768];
@@ -24,6 +39,10 @@ int bufferPos;
 csc::time_point lastWindowRead = csc::now();
 
 QMainWindow* mw;
+QLabel* label;
+Anims anims;
+const int xSpeedWalk = 3;
+const int xSpeedRun = 6;
 int xspeed = 5;
 int xdir = 1;
 int fallSpeed = 4;
@@ -34,6 +53,45 @@ int wheight;
 std::vector<QRect> windows;
 std::vector<Line> hLines;
 std::vector<Line> vLines;
+
+void Anims::play(std::string const& anim, int speed)
+{
+  if (anim == current)
+    return;
+  current = anim;
+  this->speed = speed;
+  pos = 0;
+}
+
+void Anims::step()
+{
+  if (current == "")
+    return;
+  if (pos % speed)
+  {
+    pos++;
+    return;
+  }
+  int fidx = pos / speed;
+  auto& a = frames[current];
+  label->setPixmap(a[fidx%a.size()]);
+  pos++;
+}
+void Anims::load(std::string const& path)
+{
+  QDir dir(path.c_str());
+  std::vector<std::string> files;
+  for (const QString &filename : dir.entryList(QDir::Files))
+    files.push_back(filename.toStdString());
+  std::sort(files.begin(), files.end());
+  for (auto const& f: files)
+  {
+    QPixmap pix((path + "/" + f).c_str());
+    auto p = f.find_first_of('0');
+    auto base = f.substr(0, p-1);
+    frames[base].push_back(pix);
+  }
+}
 
 bool hasGround(int x, int y)
 {
@@ -198,6 +256,15 @@ bool tryReadWindows(std::vector<QRect> & wins)
   }
   return false;
 }
+void walkOrRun()
+{
+  bool run = rand()%2;
+  xspeed = run ? xSpeedRun : xSpeedWalk;
+  if (run)
+    anims.play((xdir > 0)?"run_r":"run", 3);
+  else
+    anims.play((xdir>0)?"walk_r":"walk", 3);
+}
 void fire()
 {
   auto r = mw->geometry();
@@ -206,9 +273,15 @@ void fire()
   int tgtx = r.left();
   int tgty = r.top();
   if (xdir > 0 && r.right() >= wwidth - 3)
+  {
     xdir = -1;
+    walkOrRun();
+  }
   if (xdir < 0 && r.left() <= 3)
+  {
     xdir = 1;
+    walkOrRun();
+  }
   if (hasGround(bcx+xspeed*xdir, bcy))
   {
     tgtx += xspeed * xdir;
@@ -216,6 +289,7 @@ void fire()
   else if (hasGround(bcx, bcy))
   {
     xdir *= -1;
+    walkOrRun();
     tgtx += xspeed * xdir;
   }
   else
@@ -235,15 +309,18 @@ void fire()
   }
   else if (csc::now() - lastWindowRead > std::chrono::milliseconds(300))
     startReadWindows();
+  anims.step();
   QTimer::singleShot(std::chrono::milliseconds(10), &fire);
 }
 
 int main(int argc, char **argv)
 {
   QApplication app(argc, argv);
-     auto const rec = QApplication::desktop()->screenGeometry();
-   wheight = rec.height();
-   wwidth = rec.width();
+  anims.load(argv[1]);
+  anims.play("idle", 2);
+  auto const rec = QApplication::desktop()->screenGeometry();
+  wheight = rec.height();
+  wwidth = rec.width();
   QPixmap pix("./critter.png");
   
   mw = new QMainWindow();
@@ -251,6 +328,7 @@ int main(int argc, char **argv)
   mw->setAttribute(Qt::WA_TranslucentBackground);
   mw->setWindowFlags(Qt::FramelessWindowHint|Qt::WindowStaysOnTopHint);
   auto* l = new QLabel();
+  label = l;
   l->setPixmap(pix);
   mw->setCentralWidget(l);
   mw->show();
