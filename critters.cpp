@@ -24,6 +24,7 @@ class Anims
 public:
   void load(std::string const& dir);
   void play(std::string const& anim, int speed=1);
+  bool finished();
   void step();
 private:
   std::unordered_map<std::string, std::vector<QPixmap>> frames;
@@ -31,6 +32,21 @@ private:
   int speed;
   int pos;
 };
+enum class State
+{
+  Walking,
+  Howling,
+  Sitting, // transition
+  Seated, // idle
+  Standing, // transition
+  Up, // idle
+};
+
+template<typename T>
+int millis(T const& elapsed)
+{
+  return std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+}
 
 FILE* file;
 int fd;
@@ -46,6 +62,9 @@ const int xSpeedRun = 6;
 int xspeed = 5;
 int xdir = 1;
 int fallSpeed = 4;
+State state = State::Walking;
+csc::time_point stateStartTime = csc::now();
+csc::time_point stateEndTime;
 
 
 int wwidth;
@@ -77,6 +96,16 @@ void Anims::step()
   label->setPixmap(a[fidx%a.size()]);
   pos++;
 }
+
+bool Anims::finished()
+{
+  if (current == "")
+    return true;
+  int fidx = pos / speed;
+  auto& a = frames[current];
+  return fidx >= a.size();
+}
+
 void Anims::load(std::string const& path)
 {
   QDir dir(path.c_str());
@@ -189,6 +218,7 @@ void windowsToLines()
     filterV(left, 0, i);
     filterV(right, 0, i);
   }
+  hLines.push_back(Line{0,wheight, wwidth});
   // debug
   for (auto const& l: hLines)
   {
@@ -272,31 +302,82 @@ void fire()
   auto bcy = r.bottom();
   int tgtx = r.left();
   int tgty = r.top();
-  if (xdir > 0 && r.right() >= wwidth - 3)
+  if (state == State::Sitting && anims.finished())
   {
-    xdir = -1;
+    state = State::Seated;
+    stateStartTime = csc::now();
+    stateEndTime = stateStartTime + std::chrono::milliseconds(2000 + rand()%6000);
+    anims.play((xdir > 0)?"sitting_r":"sitting", 6);
+  }
+  if (state == State::Seated && stateEndTime <= csc::now())
+  {
+    state = State::Walking;
+    stateStartTime = csc::now();
     walkOrRun();
   }
-  if (xdir < 0 && r.left() <= 3)
+  if (state == State::Up && stateEndTime <= csc::now())
   {
-    xdir = 1;
+    state = State::Walking;
+    stateStartTime = csc::now();
     walkOrRun();
   }
-  if (hasGround(bcx+xspeed*xdir, bcy))
+  if (state == State::Howling && anims.finished())
   {
-    tgtx += xspeed * xdir;
-  }
-  else if (hasGround(bcx, bcy))
-  {
-    xdir *= -1;
+    state = State::Walking;
+    stateStartTime = csc::now();
     walkOrRun();
-    tgtx += xspeed * xdir;
   }
-  else
+  if (state == State::Walking)
   {
-    tgty += fallSpeed;
+    if (millis(csc::now() - stateStartTime) > 3000)
+    {
+      if (rand()%500 == 0)
+      {
+        state = State::Howling;
+        anims.play((xdir > 0)?"howl_r":"howl", 8);
+      }
+      else if (rand()%500 == 0)
+      {
+        state = State::Sitting;
+        anims.play((xdir > 0)?"sit_r":"sit", 8);
+      }
+      else if (rand()%500 == 0)
+      {
+        state = State::Up;
+        stateStartTime = csc::now();
+        stateEndTime = stateStartTime + std::chrono::milliseconds(2000 + rand()%8000);
+        anims.play((xdir > 0)?"idle_r":"idle", 7);
+      }
+    }
   }
-  mw->windowHandle()->setPosition(tgtx, tgty);
+  if (state == State::Walking)
+  {
+    if (xdir > 0 && r.right() >= wwidth - 3)
+    {
+      xdir = -1;
+      walkOrRun();
+    }
+    if (xdir < 0 && r.left() <= 3)
+    {
+      xdir = 1;
+      walkOrRun();
+    }
+    if (hasGround(bcx+xspeed*xdir, bcy))
+    {
+      tgtx += xspeed * xdir;
+    }
+    else if (hasGround(bcx, bcy))
+    {
+      xdir *= -1;
+      walkOrRun();
+      tgtx += xspeed * xdir;
+    }
+    else
+    {
+      tgty += fallSpeed;
+    }
+    mw->windowHandle()->setPosition(tgtx, tgty);
+  }
 
   if (file != nullptr)
   {
