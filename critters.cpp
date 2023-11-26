@@ -42,6 +42,7 @@ enum class State
   Standing, // transition
   Up, // idle
   Jumping,
+  Bite,
 };
 
 template<typename T>
@@ -71,6 +72,7 @@ int xdir = 1;
 State state = State::Walking;
 csc::time_point stateStartTime = csc::now();
 csc::time_point stateEndTime;
+csc::time_point lastBite;
 
 
 int wwidth;
@@ -409,6 +411,22 @@ void fire()
         stateEndTime = stateStartTime + std::chrono::milliseconds(2000 + rand()%8000);
         anims.play((xdir > 0)?"idle_r":"idle", 7);
       }
+    }
+  } 
+  if (state == State::Bite && anims.finished())
+  {
+    state = State::Walking;
+    walkOrRun();
+  }
+  if (state == State::Walking || state == State::Up)
+  {
+    QPoint globalCursorPos = QCursor::pos();
+    QPoint mouthPos = QPoint(bcx + r.width()*1/4*xdir, bcy-r.height()*4/7);
+    if ((mouthPos-globalCursorPos).manhattanLength() < 25 && csc::now()-lastBite > std::chrono::milliseconds(1000))
+    {
+      state = State::Bite;
+      anims.play((xdir > 0)?"bite_r":"bite", 7);
+      lastBite = csc::now();
     }
   }
   if (state == State::Walking)
