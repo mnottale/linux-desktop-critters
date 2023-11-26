@@ -151,7 +151,7 @@ bool hasGroundIntersecting(Line const& v, int& yIntersect)
 {
   for (auto const& l: hLines)
   {
-    if (l.x > v.x && l.x +l.s >v.x && l.y > v.y && l.y < v.y+v.s)
+    if (l.x < v.x && l.x +l.s >v.x && l.y > v.y && l.y < v.y+v.s)
     {
       yIntersect = l.y;
       return true;
@@ -456,6 +456,8 @@ void fire()
       tgtx += xspeed;
       tgty += yspeed;
       yspeed++;
+      if (yspeed > fallSpeed)
+        yspeed = fallSpeed;
       mw->windowHandle()->setPosition(tgtx, tgty);
     }
   }
