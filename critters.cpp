@@ -395,9 +395,25 @@ void fire()
     }
     if (hasGround(bcx+xspeed*xdir, bcy))
     {
-      tgtx += xspeed * xdir;
+      // sometimes jump up if possible
+      bool tryJump = true; // (rand()%4) == 0;
+      if (tryJump)
+      {
+        int ty;
+        if (hasGroundIntersecting(Line{bcx + jumpScanX*xdir, bcy-jumpScanY, jumpScanY-8}, ty))
+        { // jump
+          state = State::Jumping;
+          int naf = anims.nFrames("jump");
+          int jt = jumpScanX / xSpeedRun;
+          anims.play((xdir > 0)?"jump_r":"jump", jt / naf);
+          xspeed = xSpeedRun * xdir;
+          yspeed = -20;
+        }
+      }
+      if (state == State::Walking)
+        tgtx += xspeed * xdir;
     }
-    else if (hasGround(bcx, bcy))
+    else if (hasGround(bcx, bcy)) // ledge
     {
       bool tryJump = true; // (rand()%4) == 0;
       if (tryJump)
@@ -409,8 +425,8 @@ void fire()
           int naf = anims.nFrames("jump");
           int jt = jumpScanX / xSpeedRun;
           anims.play((xdir > 0)?"jump_r":"jump", jt / naf);
-          xspeed = xSpeedRun;
-          yspeed = -15;
+          xspeed = xSpeedRun * xdir;
+          yspeed = -20;
         }
       }
       if (state == State::Walking)
@@ -429,15 +445,18 @@ void fire()
   }
   if (state == State::Jumping)
   {
-    tgtx += xspeed;
-    tgty += yspeed;
-    yspeed++;
-    mw->windowHandle()->setPosition(tgtx, tgty);
     if (yspeed >=0 && hasGround(bcx, bcy))
     {
       anims.play((xdir > 0)?"idle_r":"idle", 7);
       state = State::Up;
       stateEndTime = csc::now() + std::chrono::milliseconds(800);
+    }
+    else
+    {
+      tgtx += xspeed;
+      tgty += yspeed;
+      yspeed++;
+      mw->windowHandle()->setPosition(tgtx, tgty);
     }
   }
   if (file != nullptr)
