@@ -62,7 +62,7 @@ Anims anims;
 const int xSpeedWalk = 3;
 const int xSpeedRun = 6;
 const int fallSpeed = 4;
-const int jumpScanX = 400;
+const int jumpScanX = 250;
 const int jumpScanY = 150;
 int xspeed = 5;
 int yspeed = 0;
@@ -169,7 +169,7 @@ void filterH(Line& line, int begin, int end)
       continue;
     if (line.x > mask.right() || line.x+line.s < mask.left())
       continue;
-    if (line.x >= mask.left())
+    if (line.x >= mask.left() && line.x < mask.right())
     {
       int delta = mask.right()-line.x;
       line.x += delta;
@@ -177,8 +177,7 @@ void filterH(Line& line, int begin, int end)
     }
     if (line.s > 0 && line.x+line.s < mask.right())
     {
-      int delta = mask.left()-line.x-line.s;
-      line.s -= delta;
+      line.s = mask.left()-line.x;
     }
     if (line.s >0 && line.x < mask.left() && line.x+line.s > mask.right())
     {
@@ -227,6 +226,36 @@ void filterV(Line& line, int begin, int end)
   }
   vLines.push_back(line);
 }
+void fuseHLines()
+{
+  for (int a=0; a < hLines.size(); a++)
+  {
+    for (int b=a+1; b < hLines.size();b++)
+    {
+      auto& la = hLines[a];
+      auto& lb = hLines[b];
+      if (la.y == lb.y)
+      {
+        if (la.x <= lb.x && la.x+la.s >= lb.x)
+        {
+          la.s = std::max(la.s, lb.x+lb.s-la.x);
+          std::swap(hLines[b], hLines[hLines.size()-1]);
+          hLines.pop_back();
+          b--;
+        }
+        else if (lb.x <= la.x && lb.x+lb.s >= la.x)
+        {
+          int end = std::max(la.x+la.s, lb.x+lb.s);
+          la.x = lb.x;
+          la.s = end - la.x;
+          std::swap(hLines[b], hLines[hLines.size()-1]);
+          hLines.pop_back();
+          b--;
+        }
+      }
+    }
+  }
+}
 void windowsToLines()
 {
   hLines.clear();
@@ -244,6 +273,7 @@ void windowsToLines()
     filterV(right, 0, i);
   }
   hLines.push_back(Line{0,wheight, wwidth});
+  fuseHLines();
   // debug
   for (auto const& l: hLines)
   {
@@ -478,21 +508,20 @@ void fire()
 
 int main(int argc, char **argv)
 {
+  srand(time(nullptr));
   QApplication app(argc, argv);
   anims.load(argv[1]);
   anims.play("idle", 2);
   auto const rec = QApplication::desktop()->screenGeometry();
   wheight = rec.height();
   wwidth = rec.width();
-  QPixmap pix("./critter.png");
-  
+
   mw = new QMainWindow();
   mw->setStyleSheet("background:transparent");
   mw->setAttribute(Qt::WA_TranslucentBackground);
   mw->setWindowFlags(Qt::FramelessWindowHint|Qt::WindowStaysOnTopHint);
   auto* l = new QLabel();
   label = l;
-  l->setPixmap(pix);
   mw->setCentralWidget(l);
   mw->show();
   mw->windowHandle()->setPosition(10,10);
