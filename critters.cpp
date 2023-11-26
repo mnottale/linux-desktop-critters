@@ -26,6 +26,7 @@ public:
   void play(std::string const& anim, int speed=1);
   bool finished();
   void step();
+  int nFrames(std::string const& anim);
 private:
   std::unordered_map<std::string, std::vector<QPixmap>> frames;
   std::string current;
@@ -40,6 +41,7 @@ enum class State
   Seated, // idle
   Standing, // transition
   Up, // idle
+  Jumping,
 };
 
 template<typename T>
@@ -59,9 +61,13 @@ QLabel* label;
 Anims anims;
 const int xSpeedWalk = 3;
 const int xSpeedRun = 6;
+const int fallSpeed = 4;
+const int jumpScanX = 400;
+const int jumpScanY = 150;
 int xspeed = 5;
+int yspeed = 0;
 int xdir = 1;
-int fallSpeed = 4;
+
 State state = State::Walking;
 csc::time_point stateStartTime = csc::now();
 csc::time_point stateEndTime;
@@ -72,6 +78,11 @@ int wheight;
 std::vector<QRect> windows;
 std::vector<Line> hLines;
 std::vector<Line> vLines;
+
+int Anims::nFrames(std::string const& anim)
+{
+  return frames[anim].size();
+}
 
 void Anims::play(std::string const& anim, int speed)
 {
@@ -135,6 +146,20 @@ bool hasGround(int x, int y)
   std::cerr << "miss " << x << " " << y << std::endl;
   return false;
 }
+
+bool hasGroundIntersecting(Line const& v, int& yIntersect)
+{
+  for (auto const& l: hLines)
+  {
+    if (l.x > v.x && l.x +l.s >v.x && l.y > v.y && l.y < v.y+v.s)
+    {
+      yIntersect = l.y;
+      return true;
+    }
+  }
+  return false;
+}
+
 void filterH(Line& line, int begin, int end)
 {
   for (int i=begin; i<end; i++)
@@ -374,17 +399,47 @@ void fire()
     }
     else if (hasGround(bcx, bcy))
     {
-      xdir *= -1;
-      walkOrRun();
-      tgtx += xspeed * xdir;
+      bool tryJump = true; // (rand()%4) == 0;
+      if (tryJump)
+      {
+        int ty;
+        if (hasGroundIntersecting(Line{bcx + jumpScanX*xdir, bcy-jumpScanY, jumpScanY*2}, ty))
+        { // jump
+          state = State::Jumping;
+          int naf = anims.nFrames("jump");
+          int jt = jumpScanX / xSpeedRun;
+          anims.play((xdir > 0)?"jump_r":"jump", jt / naf);
+          xspeed = xSpeedRun;
+          yspeed = -15;
+        }
+      }
+      if (state == State::Walking)
+      {
+        xdir *= -1;
+        walkOrRun();
+        tgtx += xspeed * xdir;
+      }
     }
     else
     {
       tgty += fallSpeed;
     }
-    mw->windowHandle()->setPosition(tgtx, tgty);
+    if (state == State::Walking)
+      mw->windowHandle()->setPosition(tgtx, tgty);
   }
-
+  if (state == State::Jumping)
+  {
+    tgtx += xspeed;
+    tgty += yspeed;
+    yspeed++;
+    mw->windowHandle()->setPosition(tgtx, tgty);
+    if (yspeed >=0 && hasGround(bcx, bcy))
+    {
+      anims.play((xdir > 0)?"idle_r":"idle", 7);
+      state = State::Up;
+      stateEndTime = csc::now() + std::chrono::milliseconds(800);
+    }
+  }
   if (file != nullptr)
   {
     bool ok = tryReadWindows(windows);
