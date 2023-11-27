@@ -3,6 +3,8 @@
 Have a cute creature roam on your Linux desktop,
 jumping from window to window.
 
+https://github.com/mnottale/linux-desktop-critters/assets/3638847/38f1e9cf-f139-46d1-84ff-195a7ed96b83
+
 ## Dependencies
 
     wmctrl (package wmctrl)
