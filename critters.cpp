@@ -12,6 +12,31 @@
 #include <unordered_map>
 #include <unistd.h>
 
+#include "anims.h"
+
+#define DEBUG_ENABLED 0
+
+
+#if DEBUG_ENABLED
+# define debugPrint std::cerr
+# else
+class NullDumper
+{
+public:
+  template<typename T> NullDumper& operator << (T const&)
+  {
+    return *this;
+  }
+};
+
+static NullDumper nullDumper;
+namespace std
+{
+  static const int hackHack = 0;
+}
+# define endl hackHack;
+# define debugPrint nullDumper
+#endif
 using csc = std::chrono::steady_clock;
 
 struct Line
@@ -121,6 +146,24 @@ bool Anims::finished()
 
 void Anims::load(std::string const& path)
 {
+  if (path == "")
+  {
+    std::vector<std::string> files;
+    for (auto const& kv: embeded_files)
+    {
+      files.push_back(kv.first);
+    }
+    std::sort(files.begin(), files.end());
+    for (auto const& f: files)
+    {
+      QPixmap pix;
+      pix.loadFromData(embeded_files[f].data(), embeded_files[f].size());
+      auto p = f.find_first_of('0');
+      auto base = f.substr(0, p-1);
+      frames[base].push_back(pix);
+    }
+    return;
+  }
   QDir dir(path.c_str());
   std::vector<std::string> files;
   for (const QString &filename : dir.entryList(QDir::Files))
@@ -141,11 +184,11 @@ bool hasGround(int x, int y)
   {
     if (l.y >= y && l.y < y+6 && l.x <= x && l.x+l.s >= x)
     {
-      std::cerr << "hit " << x << " " << y << " on " << l.x << " " << l.y << " " <<l.s << std::endl;
+      debugPrint << "hit " << x << " " << y << " on " << l.x << " " << l.y << " " <<l.s << std::endl;
       return true;
     }
   }
-  std::cerr << "miss " << x << " " << y << std::endl;
+  debugPrint << "miss " << x << " " << y << std::endl;
   return false;
 }
 
@@ -279,7 +322,7 @@ void windowsToLines()
   // debug
   for (auto const& l: hLines)
   {
-    std::cerr << l.x << " " << l.y << " " << l.s << std::endl;
+    debugPrint << l.x << " " << l.y << " " << l.s << std::endl;
   }
 }
 void startReadWindows()
@@ -308,7 +351,7 @@ std::vector<QRect> parseWindows(std::string const& data)
     int t = std::stoi(entry.substr(plus2+1));
     //std::cerr << entry << " " << w << " " << h << " " << l << " " << t  << std::endl;
     res.emplace_back(l, t, w, h);
-    std::cerr << entry << " => " << res.back().left() << " " << res.back().top() << " " << res.back().width() << " " << res.back().height() << std::endl;
+    debugPrint << entry << " => " << res.back().left() << " " << res.back().top() << " " << res.back().width() << " " << res.back().height() << std::endl;
   }
   return res;
 }
@@ -515,7 +558,7 @@ void fire()
     if (ok)
     {
       windowsToLines();
-      std::cerr << "got " << windows.size() << " windows" << std::endl;
+      debugPrint << "got " << windows.size() << " windows" << std::endl;
     }
   }
   else if (csc::now() - lastWindowRead > std::chrono::milliseconds(300))
@@ -528,7 +571,7 @@ int main(int argc, char **argv)
 {
   srand(time(nullptr));
   QApplication app(argc, argv);
-  anims.load(argv[1]);
+  anims.load(argc > 1 ? argv[1] : "");
   anims.play("idle", 2);
   auto const rec = QApplication::desktop()->screenGeometry();
   wheight = rec.height();
