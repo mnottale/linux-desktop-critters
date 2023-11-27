@@ -26,9 +26,9 @@ locations
 
 Pass on the command line a folder containing your animation frames.
 
-They must be in the format "<animname>_0<framenum>.png".
+They must be in the format "ANIMNAME_0FRAMENUM.png".
 
-animname must include the followings:
+ANIMNAME must include the followings:
 
     walk run jump bite idle sit standing sitting howl
 
